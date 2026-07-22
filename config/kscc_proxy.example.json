@@ -1,0 +1,26 @@
+{
+  "kscc_token": "",
+  "kscc_base_url": "https://api.kscc.example.com",
+  "default_model": "glm-5.2",
+  "model_map": {
+    "gpt-4o": "glm-5.2",
+    "gpt-4": "glm-5.2",
+    "claude-sonnet-4-5": "glm-5.2",
+    "claude-3-5-sonnet": "glm-5.2"
+  },
+  "listen": {
+    "host": "127.0.0.1",
+    "port": 8787
+  },
+  "auth": {
+    "api_key": ""
+  },
+  "defaults": {
+    "max_tokens": 4096,
+    "temperature": 1.0
+  },
+  "logging": {
+    "level": "INFO",
+    "file": ""
+  }
+}
