@@ -90,6 +90,21 @@ class KSCCBackend:
             body = {"error": {"type": "bad_response", "message": resp.text}}
         return resp.status_code, body
 
+    # -- 模型列表(给 /v1/models 端点 + 启动时缓存) ------------------------
+
+    async def list_models(self) -> tuple[int, Any]:
+        """GET 后端 /v1/models,返回 (status, body_dict)。
+
+        后端返回标准 OpenAI 格式 ``{"object":"list","data":[{"id":...}]}``。
+        """
+        url = f"{self._base}/v1/models"
+        resp = await self._http.get(url)
+        try:
+            body: Any = resp.json()
+        except Exception:
+            body = {"error": {"type": "bad_response", "message": resp.text}}
+        return resp.status_code, body
+
     async def raw_stream(self, payload: dict[str, Any], headers: dict[str, str] | None = None) -> AsyncIterator[str]:
         """流式字节透传:逐块 yield 后端 SSE 文本。
 

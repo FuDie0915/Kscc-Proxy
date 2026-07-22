@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import secrets
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
@@ -14,6 +15,9 @@ from .core.kscc_backend import KSCCBackend
 from .api.routes_anthropic import router as anthropic_router
 from .api.routes_openai import router as openai_router
 from .api.routes_responses import router as responses_router
+from .api.routes_models import router as models_router
+
+logger = logging.getLogger("kscc_proxy")
 
 
 def build_app(config: ProxyConfig) -> FastAPI:
@@ -24,6 +28,21 @@ def build_app(config: ProxyConfig) -> FastAPI:
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.backend = backend
         app.state.config = config
+        # 拉取后端模型列表,缓存真实模型 id 供 map_model 判断(真实模型原样透传,
+        # 未映射的假名才走 fallback_model 兜底)。失败则留空,保守退化为兜底。
+        try:
+            status, body = await backend.list_models()
+            if status == 200 and isinstance(body, dict):
+                ids = {
+                    m.get("id")
+                    for m in body.get("data", [])
+                    if isinstance(m, dict) and m.get("id")
+                }
+                if ids:
+                    config.known_models = ids
+                    logger.info("loaded %d backend models: %s", len(ids), ", ".join(sorted(ids)))
+        except Exception as exc:  # noqa: BLE001 - 启动期拉取失败不应阻断服务
+            logger.warning("failed to load backend models (map_model 将全部走 fallback): %s", exc)
         yield
         await backend.aclose()
 
@@ -49,6 +68,7 @@ def build_app(config: ProxyConfig) -> FastAPI:
 
     app.include_router(openai_router)
     app.include_router(responses_router)
+    app.include_router(models_router)
     app.include_router(anthropic_router)
 
     return app

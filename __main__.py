@@ -15,7 +15,7 @@ from pathlib import Path
 import uvicorn
 
 from .app import build_app
-from .core.config import ensure_config
+from .core.config import ensure_config, mask_base_url
 from .core.logging_setup import setup_logging, uvicorn_log_config
 
 
@@ -38,7 +38,7 @@ def main(argv: list[str] | None = None) -> int:
 
     setup_logging(config.logging.level, config.logging.file)
     logger = logging.getLogger("kscc_proxy")
-    logger.info("started %s:%d -> backend %s", host, port, config.kscc_base_url)
+    logger.info("started %s:%d -> backend %s", host, port, mask_base_url(config.kscc_base_url))
 
     app = build_app(config)
     # 自定义 log_config:复用 root 统一 handler,关掉 uvicorn 默认 access 日志(防重复 + 防方格)

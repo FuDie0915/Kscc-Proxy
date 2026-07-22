@@ -243,7 +243,13 @@ def openai_tools_to_anthropic(tools: list[dict[str, Any]] | None) -> list[dict[s
 
 
 def openai_to_anthropic_kwargs(req: OpenAIChatRequest, config: ProxyConfig) -> dict[str, Any]:
-    """OpenAI 请求 → 可传给 KSCC messages.create 的 kwargs(不含 stream,由调用方加)。"""
+    """OpenAI 请求 → 可传给 KSCC messages.create 的 kwargs(不含 stream,由调用方加)。
+
+    ``max_tokens`` Anthropic 强制要求,客户端未带则回退 ``defaults.max_tokens``。
+    ``temperature`` 客户端未带则**不发**(不注入 ``defaults.temperature``),交由后端
+    按各模型自身默认处理 —— 不同后端模型对 temperature 有不同约束(如 kimi-k2.6
+    只允许 0.6),注入固定默认会破坏多模型透传。
+    """
     messages, system_text = convert_messages(req.messages)
     max_tok = req.effective_max_tokens
     kwargs: dict[str, Any] = {
@@ -251,9 +257,8 @@ def openai_to_anthropic_kwargs(req: OpenAIChatRequest, config: ProxyConfig) -> d
         "messages": messages,
         "max_tokens": max_tok if max_tok is not None else config.defaults.max_tokens,
     }
-    kwargs["temperature"] = (
-        req.temperature if req.temperature is not None else config.defaults.temperature
-    )
+    if req.temperature is not None:
+        kwargs["temperature"] = req.temperature
     if system_text:
         kwargs["system"] = system_text
     tools = openai_tools_to_anthropic(req.tools)

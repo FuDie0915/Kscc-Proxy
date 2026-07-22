@@ -3,6 +3,7 @@
 一个独立运行的本地中转服务。KSCC(金山云)LLM 后端带客户端校验,只能用 kscc 官方客户端访问;本程序在本机起一个中转,用 KSCC 的特殊认证去访问后端,然后对外暴露标准接口,让任何兼容 OpenAI 或 Anthropic 的客户端指向 `http://localhost:port` 就能用上 KSCC。
 
 - **三协议对外**:同时暴露 OpenAI Chat Completions `/v1/chat/completions`、OpenAI Responses `/v1/responses`、Anthropic `/v1/messages`(均含 SSE 流式)。
+- **多模型**:`GET /v1/models` 透传后端真实模型列表,客户端在 UI 里选哪个真实模型(如 `kimi-k2.6`、`mimo-v2.5`)就用哪个;客户端习惯名(如 `gpt-4o`)经 `model_map` 映射,后台假名(如 `gpt-4o-mini`)经 `fallback_model` 兜底。
 - **配置从 JSON 文件读取**。
 
 ---
@@ -96,13 +97,13 @@ curl http://localhost:8787/v1/chat/completions \
 | `kscc_token` | string | `""` | KSCC 后端访问令牌。为空时回退环境变量 `KSCC_AUTH_TOKEN`;两者都空则启动时交互引导。 |
 | `kscc_base_url` | string | `""` | KSCC 后端根地址(不含 `/v1`)。必填,为空则启动时交互引导。 |
 | `default_model` | string | `""` | 请求未带 `model` 字段时的回退值。 |
-| `fallback_model` | string | `""` | 未命中 `model_map` 的 model 名回退到此值。**为空 = 未命中则原样透传**(兼容后端真实支持的 model);设为如 `glm-5.2` 则客户端发任何未映射的 model 都落到它(典型:ChatGPT 类客户端后台用 `gpt-4o-mini` 等小模型做标题/摘要请求,设此项可避免 403 `ModelForbidden`)。 |
-| `model_map` | object | `{}` | 外部 model 名 → KSCC 实际 model 名映射。命中则替换,未命中透传(或回退 `fallback_model`)。 |
+| `fallback_model` | string | `""` | 未命中 `model_map` **且不在后端真实模型列表**的 model 名回退到此值。为空 = 原样透传。典型:客户端后台用 `gpt-4o-mini` 等小模型做标题/摘要,设此项兜底避免 403 `ModelForbidden`。真实模型名(在 `/v1/models` 列表里)始终原样透传,不受此项影响。 |
+| `model_map` | object | `{}` | 外部 model 名 → KSCC 实际 model 名映射。命中则替换;未命中则看是否后端真实模型(透传)或回退 `fallback_model`。 |
 | `listen.host` | string | `"127.0.0.1"` | 监听地址。 |
 | `listen.port` | int | `8787` | 监听端口。 |
 | `auth.api_key` | string | `""` | 对外鉴权密钥。**为空 = 不鉴权**;非空则要求请求头 `Authorization: Bearer <api_key>` 匹配。 |
 | `defaults.max_tokens` | int | `4096` | OpenAI 请求未带 `max_tokens` 时的回退值。 |
-| `defaults.temperature` | float | `1.0` | OpenAI 请求未带 `temperature` 时的回退值。 |
+| `defaults.temperature` | float | `1.0` | 已保留(兼容旧配置),当前不再自动注入:客户端未带 `temperature` 时不发送该字段,交由后端按各模型自身默认处理(不同后端模型对 temperature 约束不同,如 kimi-k2.6 只允许 0.6)。客户端显式带 `temperature` 时仍透传。 |
 | `logging.level` | string | `"INFO"` | 日志级别。 |
 | `logging.file` | string | `""` | 日志文件路径。为空只输出到 stderr;非空同时写文件。 |
 
@@ -134,7 +135,17 @@ curl http://localhost:8787/v1/chat/completions \
 
 `default_model` 与 `model_map` 的关系:请求没带 model → 用 `default_model` 回填 → 再过 `model_map` 映射。
 
-`fallback_model`:请求带了 model 但**不在 `model_map` 里**时,若 `fallback_model` 非空就用它替换,否则原样透传。常用于"客户端发什么 model 都要落到同一后端 model"的场景——例如 ChatGPT 类客户端除了主对话(用你配置的 `gpt-4o`),还会在后台用 `gpt-4o-mini`/`gpt-4.1-mini` 等小模型发**生成标题、摘要**的请求;这些名字不在 `model_map` 里会原样透传给后端,被以 `ModelForbidden`(403)拒绝。把 `fallback_model` 设成 `glm-5.2` 即可让这些请求也走 glm-5.2。
+`fallback_model`:请求带了 model 但**既不在 `model_map`、也不在后端真实模型列表**时,若 `fallback_model` 非空就用它替换,否则原样透传。真实模型(启动时从后端 `/v1/models` 拉取缓存)始终原样透传,**不受此项影响** —— 所以设了 `fallback_model: glm-5.2` 也不会把 `kimi-k2.6` 改成 glm-5.2。常用于兜底客户端后台的假名请求:例如 ChatGPT 类客户端除主对话外,会在后台用 `gpt-4o-mini`/`gpt-4.1-mini` 等小模型发**生成标题、摘要**的请求,这些名字不是后端真实模型,原样透传会被以 `ModelForbidden`(403)拒绝,设 `fallback_model` 即可让它们也走 glm-5.2。后端模型列表在**启动时**拉取并缓存,后端新增模型需重启代理刷新。
+
+### 多模型怎么用
+
+后端 KSCC 支持多个模型(对话类如 `glm-5.2`、`kimi-k2.6`、`mimo-v2.5`、`mimo-v2.5-pro`、`glm-5.1`、`kimi-k2.5`、`glm-5`、`qwen3-vl-plus`、`hunyuan-*`、`mgg-*`、`mog-*` 等,详见 `GET /v1/models`)。原 kscc 客户端用 `/model` 切换,本代理的等价方式:
+
+1. 客户端调 `GET /v1/models` 拿到真实模型列表(代理透传后端)。
+2. 在客户端 UI 里选要用的模型(如 `kimi-k2.6`)。
+3. 请求里带该 model 名 → 代理识别为后端真实模型 → **原样透传**,真正用 kimi 跑。
+
+无需为每个真实模型在 `model_map` 里加自映射条目 —— 真实模型名自动透传。`model_map` 只用来处理"客户端习惯名 → 真实名"(如 `gpt-4o` → `glm-5.2`)。
 
 ---
 
@@ -265,24 +276,30 @@ OpenAI 新版 Responses API(部分 "ChatGPT" 类客户端、Codex、`openai` SDK
 - 非流式:返回标准 Responses `response` 对象,`output` 为 `message`(`output_text` part)与 `function_call` item 的数组,含 `usage`(`input_tokens`/`output_tokens`/`total_tokens`)。
 - 流式(`stream: true`):返回带 `event:` 前缀的 SSE,事件序列 `response.created` → `response.in_progress` → `response.output_item.added` → `response.content_part.added` → `response.output_text.delta`(文本增量)→ `response.output_text.done` → `response.content_part.done` → `response.output_item.done` → … → `response.completed`(收尾,**不发** `data: [DONE]`)。工具调用增量走 `response.function_call_arguments.delta` / `.done`。
 
-### 5.3 Anthropic 兼容端点
+### 5.3 模型列表
+
+**`GET /v1/models`(或 `/v1/models/`)**
+
+透传后端 KSCC 的模型列表(标准 OpenAI 格式 `{"object":"list","data":[{"id":"glm-5.2",...}]}`),让客户端在 UI 里发现并选择真实可用的模型。选中的真实模型名在后续请求里原样透传给后端(经 `map_model` 识别为后端真实模型,不走 `fallback_model`)。鉴权同其它端点(设了 `auth.api_key` 时需带 key)。
+
+### 5.4 Anthropic 兼容端点
 
 **`POST /v1/messages`**
 
 后端本身就是 Anthropic 格式,此端点**字节级透传**(最保真):
 
-- 只覆盖 `model` 字段(经 `model_map` 映射)。
+- 只覆盖 `model` 字段(经 `model_map` / 真实模型透传 / `fallback_model` 三段映射,见 [2. 配置说明](#关于-model_map))。
 - 其余字段(`system` / `messages` / `tools` / `tool_choice` / `thinking` / `temperature` / `top_p` / `stop_sequences` 等)原样透传。
 - 客户端的 `anthropic-version`、`anthropic-beta` 等功能性请求头一并透传给后端(认证头除外,由中转固定头覆盖)。
 - 非流式:原样返回后端 Anthropic 响应(`type:"message"`、`content`、`stop_reason`、`usage`)。
 - 流式:原样透传后端 SSE(`event: message_start` / `content_block_delta` / `message_delta` / `message_stop`)。
 - 客户端**不需要**传 `?beta=true`,`beta` 由中转注入后端。
 
-### 5.4 健康检查
+### 5.5 健康检查
 
 **`GET /healthz`(或 `/healthz/`)** → `{"status":"ok"}`(免鉴权)。
 
-### 5.5 鉴权
+### 5.6 鉴权
 
 当 `auth.api_key` 非空时,除 `/healthz` 外所有请求都要求:
 
@@ -356,8 +373,9 @@ kscc_proxy/                     # 包根(包名即 kscc_proxy,python -m kscc_pro
 ├── api/                        # HTTP 端点 + 转换
 │   ├── routes_openai.py        #   /v1/chat/completions
 │   ├── routes_responses.py     #   /v1/responses(OpenAI Responses API)
+│   ├── routes_models.py        #   /v1/models(透传后端模型列表)
 │   ├── routes_anthropic.py     #   /v1/messages(httpx 透传 + 头透传)
-│   ├── convert_openai.py      #   Chat Completions ↔Anthropic 格式转换 + 流事件→SSE 映射
+│   ├── convert_openai.py       #   Chat Completions ↔Anthropic 格式转换 + 流事件→SSE 映射
 │   └── convert_responses.py    #   Responses ↔Anthropic 格式转换 + response.* 流事件映射
 ├── config/                     # 配置文件目录
 │   ├── kscc_proxy.json         #   真实配置(含 token,被 .gitignore 忽略)
