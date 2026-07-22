@@ -2,6 +2,7 @@
   "kscc_token": "",
   "kscc_base_url": "https://api.kscc.example.com",
   "default_model": "glm-5.2",
+  "fallback_model": "glm-5.2",
   "model_map": {
     "gpt-4o": "glm-5.2",
     "gpt-4": "glm-5.2",

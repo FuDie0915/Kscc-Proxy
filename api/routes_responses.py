@@ -1,4 +1,9 @@
-"""OpenAI 兼容端点 /v1/chat/completions(非流式 + 流式)。"""
+"""OpenAI Responses 兼容端点 /v1/responses(非流式 + 流式)。
+
+Responses API 与 Chat Completions 形状不同(请求 ``input``、响应 ``output``、
+流式 ``response.*`` 事件),但底层同样转成 Anthropic messages 发给 KSCC,
+结构与 :mod:`routes_openai` 平行。
+"""
 
 from __future__ import annotations
 
@@ -10,12 +15,12 @@ import anthropic
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from .convert_openai import (
-    anthropic_response_to_openai,
-    openai_stream_generator,
-    openai_to_anthropic_kwargs,
+from .convert_responses import (
+    anthropic_to_responses,
+    responses_stream_generator,
+    responses_to_anthropic_kwargs,
 )
-from ..core.models import OpenAIChatRequest
+from ..core.models import OpenAIResponsesRequest
 from ..core.sse import streaming_response
 
 logger = logging.getLogger("kscc_proxy")
@@ -41,8 +46,8 @@ def _log_request(method: str, path: str, status: int, ms: float, model: str, str
     logger.info("%s %s %d %dms%s", method, path, status, ms, extra)
 
 
-@router.post("/v1/chat/completions")
-async def chat_completions(request: Request) -> Any:
+@router.post("/v1/responses")
+async def responses(request: Request) -> Any:
     backend = request.app.state.backend
     config = request.app.state.config
     t0 = time.perf_counter()
@@ -51,13 +56,13 @@ async def chat_completions(request: Request) -> Any:
 
     try:
         raw = await request.json()
-        req = OpenAIChatRequest.model_validate(raw)
+        req = OpenAIResponsesRequest.model_validate(raw)
     except Exception as exc:
         ms = int((time.perf_counter() - t0) * 1000)
         logger.warning("%s %s 400 %dms invalid_request: %s", method, path, ms, exc)
         raise HTTPException(status_code=400, detail=f"invalid request: {exc}") from exc
 
-    kwargs = openai_to_anthropic_kwargs(req, config)
+    kwargs = responses_to_anthropic_kwargs(req, config)
     model = kwargs["model"]
 
     if req.stream:
@@ -69,7 +74,7 @@ async def chat_completions(request: Request) -> Any:
             return _error_response(exc)
         # 流式耗时在生成器结束时记录
         async def _gen():
-            async for chunk in openai_stream_generator(stream, model, req.include_usage):
+            async for chunk in responses_stream_generator(stream, model):
                 yield chunk
             ms = int((time.perf_counter() - t0) * 1000)
             _log_request(method, path, 200, ms, model, True)
@@ -90,4 +95,4 @@ async def chat_completions(request: Request) -> Any:
         out = getattr(usage, "output_tokens", 0) or 0
         usage_str = f"tok={inp}/{out}"
     _log_request(method, path, 200, ms, model, False, usage_str)
-    return JSONResponse(content=anthropic_response_to_openai(resp, model))
+    return JSONResponse(content=anthropic_to_responses(resp, model))

@@ -18,6 +18,15 @@ def openai_sse_done() -> str:
     return "data: [DONE]\n\n"
 
 
+def responses_sse_event(event_type: str, payload: dict[str, Any]) -> str:
+    """OpenAI Responses 风格 SSE:event: <type>\\ndata: {json}\\n\\n。
+
+    Responses 流式与 Chat Completions 不同:每帧带 ``event:`` 前缀,且不以
+    ``data: [DONE]`` 结尾(由 ``response.completed`` 收尾)。
+    """
+    return f"event: {event_type}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
 def streaming_response(
     generator: AsyncIterator[str],
     media_type: str = "text/event-stream",

@@ -39,6 +39,8 @@ class ProxyConfig(BaseModel):
     kscc_base_url: str = ""
     default_model: str = ""
     model_map: dict[str, str] = Field(default_factory=dict)
+    # 未命中 model_map 的 model 名回退到此值;为空则原样透传(兼容后端真实支持的 model)
+    fallback_model: str = ""
     listen: ListenConfig = Field(default_factory=ListenConfig)
     auth: AuthConfig = Field(default_factory=AuthConfig)
     defaults: DefaultsConfig = Field(default_factory=DefaultsConfig)
@@ -82,13 +84,18 @@ def load_config(path: str | Path) -> ProxyConfig:
 def map_model(req_model: str | None, config: ProxyConfig) -> str:
     """请求 model 经映射后返回 KSCC 实际 model。
 
-    请求未带 model 时回退 ``default_model``;再按 ``model_map`` 映射;
-    命中替换,未命中透传。
+    请求未带 model 时回退 ``default_model``;再按 ``model_map`` 映射:
+    命中则替换;未命中时,若设了 ``fallback_model`` 则回退到它(让客户端发
+    任何 model 名都落到同一后端 model),否则原样透传(兼容后端真实支持的 model)。
     """
     effective = req_model or config.default_model
     if not effective:
         return effective
-    return config.model_map.get(effective, effective)
+    if effective in config.model_map:
+        return config.model_map[effective]
+    if config.fallback_model:
+        return config.fallback_model
+    return effective
 
 
 def _prompt_token() -> str:

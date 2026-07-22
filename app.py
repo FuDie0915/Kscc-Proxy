@@ -13,6 +13,7 @@ from .core.config import ProxyConfig
 from .core.kscc_backend import KSCCBackend
 from .api.routes_anthropic import router as anthropic_router
 from .api.routes_openai import router as openai_router
+from .api.routes_responses import router as responses_router
 
 
 def build_app(config: ProxyConfig) -> FastAPI:
@@ -47,6 +48,7 @@ def build_app(config: ProxyConfig) -> FastAPI:
         return {"status": "ok"}
 
     app.include_router(openai_router)
+    app.include_router(responses_router)
     app.include_router(anthropic_router)
 
     return app
