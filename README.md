@@ -25,17 +25,17 @@
 ### 1.1 安装依赖
 
 ```bash
-cd d:\Project\kscc_proxy
-pip install -r requirements.txt
+# 在仓库根目录执行(clone 后的顶层目录,名字任意)
+pip install -r kscc_proxy/requirements.txt
 ```
 
 依赖:anthropic、fastapi、uvicorn、pydantic、httpx。
 
 ### 1.2 填配置
 
-编辑 [config/kscc_proxy.json](config/kscc_proxy.json),至少改这两项(也可不预填,直接 1.3 启动会交互式引导):
+编辑 [kscc_proxy/config/kscc_proxy.json](kscc_proxy/config/kscc_proxy.json),至少改这两项(也可不预填,直接 1.3 启动会交互式引导):
 
-> 若从 git 克隆(真实配置被 `.gitignore` 忽略,仓库里只有示例),先复制:`copy config\kscc_proxy.example.json config\kscc_proxy.json`(bash 用 `cp`),再编辑。
+> 若从 git 克隆(真实配置被 `.gitignore` 忽略,仓库里只有示例),先复制:`copy kscc_proxy\config\kscc_proxy.example.json kscc_proxy\config\kscc_proxy.json`(bash 用 `cp kscc_proxy/config/kscc_proxy.example.json kscc_proxy/config/kscc_proxy.json`),再编辑。
 
 ```json
 {
@@ -49,12 +49,12 @@ pip install -r requirements.txt
 
 ### 1.3 启动
 
-> 配置未填(`config/kscc_proxy.json` 不存在,或 `kscc_token`/`kscc_base_url` 为空且无 `KSCC_AUTH_TOKEN` 环境变量)时,启动会**交互式引导**填写并自动写回 `config/kscc_proxy.json`:token 输入隐藏回显,`kscc_base_url` 自动去掉尾部 `/v1`。填好后即继续启动。
+> 配置未填(`kscc_proxy/config/kscc_proxy.json` 不存在,或 `kscc_token`/`kscc_base_url` 为空且无 `KSCC_AUTH_TOKEN` 环境变量)时,启动会**交互式引导**填写并自动写回 `kscc_proxy/config/kscc_proxy.json`:token 输入隐藏回显,`kscc_base_url` 自动去掉尾部 `/v1`。填好后即继续启动。
 
 **方式 A:直接启动(首次推荐)**
 
 ```bash
-cd d:\Project
+cd <仓库根>            # clone 后的顶层目录(名字任意,如 Kscc-Proxy)
 python -m kscc_proxy --config kscc_proxy/config/kscc_proxy.json
 ```
 
@@ -62,10 +62,10 @@ python -m kscc_proxy --config kscc_proxy/config/kscc_proxy.json
 
 | 脚本 | 适用 | 用法 |
 |---|---|---|
-| [start.bat](start.bat) | Windows,双击/命令行 | 双击,或 `start.bat --port 9000` |
-| [start.sh](start.sh) | git-bash / WSL | `bash start.sh`,或 `./start.sh`(先 `chmod +x`) |
+| [start.bat](scripts/start.bat) | Windows,双击/命令行 | 双击,或 `scripts\start.bat --port 9000` |
+| [start.sh](scripts/start.sh) | git-bash / WSL | `bash scripts/start.sh`,或 `./scripts/start.sh`(先 `chmod +x`) |
 
-脚本会自动切到父目录 `d:\Project`,透传参数(如 `--host 0.0.0.0 --port 9000`)。首次运行前需装依赖:`pip install -r kscc_proxy/requirements.txt`。
+脚本会自动切到仓库根(本脚本上一级)再 `python -m kscc_proxy`,透传参数(如 `--host 0.0.0.0 --port 9000`)。与机器无关:不依赖盘符/绝对路径,clone 到任意位置都能跑。首次运行前需装依赖:`pip install -r kscc_proxy/requirements.txt`。
 
 看到下面这行就说明起来了:
 
@@ -90,7 +90,7 @@ curl http://localhost:8787/v1/chat/completions \
 
 ## 2. 配置说明
 
-配置文件 [kscc_proxy.json](config/kscc_proxy.json) 各字段:
+配置文件 [kscc_proxy.json](kscc_proxy/config/kscc_proxy.json) 各字段:
 
 | 字段 | 类型 | 默认 | 说明 |
 |---|---|---|---|
@@ -157,7 +157,7 @@ python -m kscc_proxy --config <路径> --host <地址> --port <端口>
 
 | 参数 | 默认 | 说明 |
 |---|---|---|
-| `--config` | 同目录 `config/kscc_proxy.json` | 配置文件路径。 |
+| `--config` | 同目录 `config/kscc_proxy.json`(即 `kscc_proxy/config/kscc_proxy.json`) | 配置文件路径。 |
 | `--host` | 配置里的 `listen.host` | 覆盖监听地址。设 `0.0.0.0` 允许局域网访问。 |
 | `--port` | 配置里的 `listen.port` | 覆盖监听端口。 |
 
@@ -171,7 +171,7 @@ python -m kscc_proxy --config kscc_proxy/config/kscc_proxy.json --host 0.0.0.0 -
 
 ## 4. 接客户端
 
-> **鉴权说明**:[kscc_proxy.json](config/kscc_proxy.json) 默认 `auth.api_key` 为空 = **不鉴权**,本机自用时下方所有 `api_key` / `Authorization` 头**可省略,或填任意非空值**(代理不校验)。若你设置了 `auth.api_key`(如下面用 `mykey123` 举例),则客户端必须填**完全相同的值**,否则 401。两种情况按客户端类型二选一。
+> **鉴权说明**:[kscc_proxy.json](kscc_proxy/config/kscc_proxy.json) 默认 `auth.api_key` 为空 = **不鉴权**,本机自用时下方所有 `api_key` / `Authorization` 头**可省略,或填任意非空值**(代理不校验)。若你设置了 `auth.api_key`(如下面用 `mykey123` 举例),则客户端必须填**完全相同的值**,否则 401。两种情况按客户端类型二选一。
 >
 > **客户端强制要填 Key / 模型名时**(有些客户端这两项不能留空):Key 填 `sk-kscc-proxy`(任意非空值均可,代理不校验);模型名填 `gpt-4o`(`model_map` 会映射到 `glm-5.2`)或直接填 `glm-5.2`。客户端发什么 model 都会先经 `model_map` 映射,命中则替换、未命中透传给后端。
 
@@ -314,7 +314,7 @@ OpenAI 新版 Responses API(部分 "ChatGPT" 类客户端、Codex、`openai` SDK
 
 | 现象 | 可能原因与排查 |
 |---|---|
-| 启动交互式引导填 token/base_url | `config/kscc_proxy.json` 不存在,或 `kscc_token`/`kscc_base_url` 为空且无 `KSCC_AUTH_TOKEN` 环境变量。填好自动写回再启动。 |
+| 启动交互式引导填 token/base_url | `kscc_proxy/config/kscc_proxy.json` 不存在,或 `kscc_token`/`kscc_base_url` 为空且无 `KSCC_AUTH_TOKEN` 环境变量。填好自动写回再启动。 |
 | 启动报"配置文件格式错误" | JSON 语法错误,检查逗号/引号(此情况不交互,需手动修)。 |
 | 客户端报 401 | `auth.api_key` 已设,但客户端没填或填错 key。 |
 | 客户端报 400 "invalid request" | 请求体不是合法 JSON,或 OpenAI 请求体缺少必填的 `messages`。 |
@@ -360,31 +360,32 @@ curl -N http://localhost:8787/v1/messages \
 ## 7. 文件结构
 
 ```
-kscc_proxy/                     # 包根(包名即 kscc_proxy,python -m kscc_proxy 入口)
-├── __init__.py                 # 包标记
-├── __main__.py                 # 入口:python -m kscc_proxy
-├── app.py                      # FastAPI 组装 + 鉴权 + /healthz
-├── core/                       # 基础设施
-│   ├── config.py               #   配置加载 + model 映射 + 交互引导
-│   ├── kscc_backend.py         #   KSCC 认证:anthropic SDK + httpx 双客户端
-│   ├── models.py               #   OpenAI 请求体模型
-│   ├── sse.py                  #   SSE 封装
-│   └── logging_setup.py        #   统一日志(彩色 + 防方格)
-├── api/                        # HTTP 端点 + 转换
-│   ├── routes_openai.py        #   /v1/chat/completions
-│   ├── routes_responses.py     #   /v1/responses(OpenAI Responses API)
-│   ├── routes_models.py        #   /v1/models(透传后端模型列表)
-│   ├── routes_anthropic.py     #   /v1/messages(httpx 透传 + 头透传)
-│   ├── convert_openai.py       #   Chat Completions ↔Anthropic 格式转换 + 流事件→SSE 映射
-│   └── convert_responses.py    #   Responses ↔Anthropic 格式转换 + response.* 流事件映射
-├── config/                     # 配置文件目录
-│   ├── kscc_proxy.json         #   真实配置(含 token,被 .gitignore 忽略)
-│   └── kscc_proxy.example.json #   示例配置(空 token,提交到仓库)
-├── scripts/                    # 启动脚本
+Kscc-Proxy/                      # 仓库根(clone 后目录名任意,不影响运行)
+├── kscc_proxy/                 #   Python 包(包名固定 kscc_proxy,python -m kscc_proxy 入口)
+│   ├── __init__.py             #   包标记
+│   ├── __main__.py             #   入口:python -m kscc_proxy
+│   ├── app.py                  #   FastAPI 组装 + 鉴权 + /healthz
+│   ├── core/                   #   基础设施
+│   │   ├── config.py           #     配置加载 + model 映射 + 交互引导
+│   │   ├── kscc_backend.py     #     KSCC 认证:anthropic SDK + httpx 双客户端
+│   │   ├── models.py           #     OpenAI 请求体模型
+│   │   ├── sse.py              #     SSE 封装
+│   │   └── logging_setup.py    #     统一日志(彩色 + 防方格)
+│   ├── api/                    #   HTTP 端点 + 转换
+│   │   ├── routes_openai.py    #     /v1/chat/completions
+│   │   ├── routes_responses.py #     /v1/responses(OpenAI Responses API)
+│   │   ├── routes_models.py    #     /v1/models(透传后端模型列表)
+│   │   ├── routes_anthropic.py #     /v1/messages(httpx 透传 + 头透传)
+│   │   ├── convert_openai.py   #     Chat Completions ↔Anthropic 格式转换 + 流事件→SSE 映射
+│   │   └── convert_responses.py #     Responses ↔Anthropic 格式转换 + response.* 流事件映射
+│   ├── config/                 #   配置文件目录
+│   │   ├── kscc_proxy.json     #     真实配置(含 token,被 .gitignore 忽略)
+│   │   └── kscc_proxy.example.json #   示例配置(空 token,提交到仓库)
+│   └── requirements.txt        #   独立依赖
+├── scripts/                    # 启动脚本(在仓库根,运行时自动 cd 回仓库根再 -m)
 │   ├── start.bat               #   Windows
 │   └── start.sh                #   git-bash/WSL
 ├── .gitignore
-├── requirements.txt            # 独立依赖
 └── README.md                   # 本文档
 ```
 

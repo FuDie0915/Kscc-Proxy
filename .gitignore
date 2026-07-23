@@ -10,7 +10,6 @@ venv/
 
 # 真实配置含 KSCC token,禁止提交(仓库只保留 example)
 kscc_proxy/config/kscc_proxy.json
-config/kscc_proxy.json
 
 # 日志
 *.log
