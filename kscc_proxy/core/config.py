@@ -188,12 +188,36 @@ def _prompt_base_url() -> str:
         return val
 
 
+def _example_template(config_dir: Path) -> dict:
+    """以同目录 ``kscc_proxy.example.json`` 作为全新配置的模板。
+
+    复用示例文件的推荐默认值(``fallback_model`` / ``default_model`` /
+    ``model_map`` 等),避免新生成的最小配置缺这些默认、导致未映射的假名
+    请求原样透传被后端 403。剔除示例里的占位 ``kscc_token`` 与
+    ``kscc_base_url``(后者是 ``https://api.kscc.example.com`` 占位值),
+    让 :func:`ensure_config` 仍交互引导填真实值。无示例或读取失败则返回空 dict。
+    """
+    example = config_dir / "kscc_proxy.example.json"
+    if not example.is_file():
+        return {}
+    try:
+        data = json.loads(example.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    for k in ("kscc_token", "kscc_base_url"):
+        data.pop(k, None)
+    return data
+
+
 def ensure_config(path: str | Path) -> ProxyConfig:
     """加载配置,缺失必填项(或文件不存在)时交互式引导补全并写回。
 
     只引导 ``kscc_token`` 与 ``kscc_base_url`` 两项;token 有环境变量
     ``KSCC_AUTH_TOKEN`` 兜底时不引导。写回时保留原文件其余字段。
-    最终仍委托 :func:`load_config` 完成加载与校验。
+    文件不存在时以同目录 ``kscc_proxy.example.json`` 为模板(带推荐默认值),
+    而非从空 dict 起步。最终仍委托 :func:`load_config` 完成加载与校验。
     """
     p = Path(path)
     if p.is_file():
@@ -204,7 +228,9 @@ def ensure_config(path: str | Path) -> ProxyConfig:
         if not isinstance(raw, dict):
             return load_config(path)  # 顶层非 object,同上
     else:
-        raw = {}  # 文件不存在 → 全新创建
+        # 文件不存在 → 以同目录 example.json 为模板全新创建,自带推荐默认值
+        # (fallback_model 等),避免最小配置缺默认导致假名请求原样透传被 403。
+        raw = _example_template(p.parent)
 
     need_token = not raw.get("kscc_token") and not os.environ.get("KSCC_AUTH_TOKEN", "")
     need_base = not raw.get("kscc_base_url")
